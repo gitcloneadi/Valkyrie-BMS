@@ -12,22 +12,22 @@ The platform simulates a battery "sensor node" pushing telemetry at controlled i
 
 * **Data Pipeline**: Consolidates raw NASA battery datasets into a standardized, timestamped telemetry schema.
 * **Virtual Sensor Node**: `virtual_mcu.py` acts as the IoT device — computing Coulomb counting and fault logic, then emitting telemetry packets.
-* **IoT Broker**: A FastAPI backend with SQLite (WAL mode) ingesting device data and broadcasting it to subscribed clients over WebSockets — the same broker/pub-sub pattern used in MQTT-style IoT stacks.
+* **IoT Broker**: A FastAPI backend with SQLite ingesting device data and broadcasting it to subscribed clients over WebSockets — the same broker/pub-sub pattern used in MQTT-style IoT stacks.
 * **Live Telemetry Dashboard**: Real-time cell state, thermal profile, and power visualization, updated push-style (no polling).
 
 ## 🏗️ Architecture
 
-* **Virtual device layer (implemented):** `virtual_mcu.py` simulates the edge device — running Coulomb counting + fault logic locally and pushing JSON telemetry to the broker.
-* **Broker layer (implemented):** `main.py` (FastAPI) ingests device payloads, persists them to SQLite, and fans them out to connected dashboard clients via WebSocket.
-* **Physical device layer (designed for, not yet deployed):** The packet framing (sync bytes + checksum) mirrors what a UART-connected microcontroller would send, so a real embedded sensor node could be swapped in later without touching the broker or UI.
+* **Virtual device layer:** `virtual_mcu.py` simulates the edge device — running Coulomb counting + fault logic locally and pushing JSON telemetry to the broker.
+* **Broker layer :** `main.py`  ingests device payloads, persists them to SQLite, and fans them out to connected dashboard clients via WebSocket.
+* **Physical device layer :** The packet framing mirrors what a UART-connected microcontroller would send, so a real embedded sensor node could be swapped in later without touching the broker or UI.
 
 ## 🛠️ Tech Stack
 
-* **Device simulation**: Python (Coulomb counting, fault-detection state machine)
+* **Device simulation**: Python 
 * **Broker / backend**: FastAPI, Uvicorn, SQLite3 (WAL mode), WebSockets
 * **Dashboard**: HTML/CSS/JS, live WebSocket updates
 * **Data processing**: Pandas, Requests
-* **Target edge hardware (planned)**: STM32 ARM Cortex over UART
+* **Target edge hardware **: STM32 ARM Cortex over UART
 
 ## 🚦 Quick Start
 

@@ -1,45 +1,42 @@
-# BMS-HIL: Digital Twin & Hardware-in-the-Loop Framework
+# Valkyrie-BMS: Software-in-the-Loop Battery Telemetry & Verification Framework
 
-This project implements a **Real-Time Hardware-in-the-Loop (HIL) Verification Framework** for a Battery Management System (BMS). It uses NASA’s PCoE battery aging datasets to simulate real-world battery physics and stream them to an external controller (e.g., STM32) for state estimation and fault detection.
+This project implements a **Software-in-the-Loop (SIL) simulation framework** for Battery Management System (BMS) verification, built around NASA's PCoE battery aging datasets to reproduce real-world cell behavior (Voltage, Current, Temperature) at controlled frequencies.
+
+The system is designed with a **hardware-portable packet schema**, so the same telemetry format and fault-logic contract used here could be dropped onto a real MCU (e.g. STM32) over UART for Hardware-in-the-Loop testing — that path is a design goal / next step, not something benchmarked on physical hardware yet.
 
 ## 🚀 Overview
 
-The system bridges the gap between static datasets and real-time hardware testing. By "streaming" physics-accurate battery data over UART at high frequencies (100Hz), we can test BMS algorithms (like SoC estimation or Fault Detection) without needing a physical battery pack.
+The framework replays physics-accurate battery data to validate BMS state-estimation (SoC) and fault-detection logic under dynamic load conditions, without requiring physical hardware in the loop.
 
-### Key Features
+### Core Capabilities
 
-* **Data Pipeline**: Cleans and consolidates NASA battery datasets into a standardized schema for HIL.
-* **Real-Time Streaming**: High-speed serial communication (460,800 baud) using a custom packet protocol.
-* **Digital Twin Simulation**: Python-based simulation of voltage/current waveforms with fault injection capabilities ('i' to inject, 'n' for normal).
-* **Telemetry Visualization**: Real-time plotting of State of Charge (SoC) and Voltage using Matplotlib.
+* **Data Pipeline**: Consolidates raw NASA battery datasets into a standardized, timestamped schema.
+* **Virtual MCU**: `virtual_mcu.py` runs Coulomb counting and fault logic in Python, emitting telemetry on the same schema a real MCU firmware would use.
+* **Broker**: A FastAPI backend with SQLite (WAL mode) persisting samples and broadcasting them to clients over WebSockets.
+* **Live Telemetry UI**: Real-time cell state, thermal profile, and power dissipation, rendered in a custom dashboard.
 
-## 📁 Project Structure
+## 🏗️ Architecture
 
-* `data_sorter.py`: Refines thousands of CSV files into a master `cleaned.csv`, aligning charge/discharge modes.
-* `nasa_streamer.py`: The HIL engine. Streams master dataset physics (V, I, T) to the hardware at 100Hz.
-* `digital_twin_test.py`: A simulation tool to test the protocol and visualization without the NASA dataset.
+* **SIL Path (implemented):** `virtual_mcu.py` computes Coulomb counting + fault logic in Python and pushes JSON payloads to `main.py`, which persists to SQLite and broadcasts over WebSocket to the dashboard.
+* **HIL Path (designed for, not yet built):** The packet schema is UART-compatible by design (sync bytes, checksum framing) so a real STM32 target could replace the virtual MCU without changing the broker or UI.
 
-## 🛠 Tech Stack
+## 🛠️ Tech Stack
 
-* **Languages**: Python, Verilog/C (for the hardware side).
-* **Protocols**: UART, Custom Binary Packet (Sync: `0xAA 55`, XOR Checksum).
-* **Libraries**: Pandas, Serial, Matplotlib, Struct, TQDM.
+* **Simulation / Logic**: Python (Coulomb counting, fault-detection state machine)
+* **Backend Broker**: FastAPI, Uvicorn, SQLite3 (WAL mode)
+* **Frontend UI**: HTML/CSS/JS over WebSockets
+* **Data Processing**: Pandas, Requests
+* **Target hardware (planned)**: STM32 ARM Cortex over UART
 
-## 📊 Protocol Specification
+## 🚦 Quick Start
 
-The framework uses a 16-byte frame for efficiency:
-| Header (2B) | Msg ID (1B) | Data A (4B - Float) | Data B (4B - Float) | Data C (4B - Float) | Checksum (1B) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `0xAA 55` | `0x01` | Voltage | Current | Temperature | XOR |
-
-## 🚦 Getting Started
-
-1. **Clean the Data**:
-`python data_sorter.py`
-2. **Run the HIL Stream**:
-Connect your STM32/Microcontroller to `COM8` (or your specific port) and run:
-`python nasa_streamer.py`
-3. **Simulate a Fault**:
-Run `digital_twin_test.py` and hold the 'i' key to trigger a fault state in the telemetry.
-
----
+1. **Start the backend broker:**
+```bash
+   uvicorn main:app
+```
+2. **Run the virtual MCU simulation:**
+```bash
+   python virtual_mcu.py
+```
+3. **Open the dashboard:**
+   Open `valkyrie_dashboard.html` in your browser to view live telemetry.

@@ -1,0 +1,21 @@
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+plotly
+streamlit
+streamlit-autorefresh
+# ML / modeling
+joblib
+# Data handling
+scipy
+# Optional (if used in repo scripts)
+tqdm
+# For streaming / simulation
+pyserial
+requests
+fastapi
+uvicorn
+# If notebook-based experimentation
+jupyter

@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valkyrie BMS — Telemetry</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#050505;
+    --panel:#0d0d0e;
+    --panel-2:#111113;
+    --line:#1c1c1e;
+    --line-bright:#303033;
+    --white:#f2f2f0;
+    --grey:#9a9a9d;
+    --grey-dim:#68686c;
+    --grey-faint:#3a3a3d;
+    --accent:#ffffff;
+    --green:#7fd99a;
+    --green-dim:#3c5f49;
+    --amber:#e0b45f;
+    --amber-dim:#5f4e2c;
+    --red:#e2726a;
+    --red-dim:#5a2f2c;
+    --text:#e9e9e7;
+    --text-dim:#8c8c8f;
+    --text-faint:#4c4c50;
+
+    /* circuit wire colors */
+    --w-power:#c96b64;
+    --w-gnd:#5a5a5e;
+    --w-signal:#e9e9e7;
+    --w-thermal:#cf9f57;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; width:100%; min-height:100vh;}
+
+  body{
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 34px 34px;
+    background-attachment: fixed;
+    background-color: var(--bg);
+  }
+
+  .mono{font-family:'JetBrains Mono',monospace;}
+  ::selection{background:var(--white); color:var(--bg);}
+
+  /* ---------- TOP BAR ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 32px;
+    border-bottom:1px solid var(--line-bright);
+    background:linear-gradient(180deg, rgba(17,17,19,0.9), rgba(5,5,5,0.5));
+    position:sticky; top:0; z-index:40; backdrop-filter:blur(6px);
+  }
+  .brand{display:flex; align-items:center; gap:14px;}
+  .brand-mark{
+    width:36px; height:36px; border-radius:4px;
+    background:linear-gradient(155deg,#2c2c2e,#0a0a0b 60%);
+    border:1px solid var(--line-bright);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:15px; color:var(--white);
+    font-family:'JetBrains Mono',monospace;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .brand-text h1{font-size:16px; font-weight:600; letter-spacing:-0.01em;}
+  .brand-text p{font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; letter-spacing:0.03em; margin-top:2px;}
+
+  .top-right{display:flex; align-items:center; gap:26px;}
+  .stat-chip{display:flex; flex-direction:column; align-items:flex-end;}
+  .stat-chip .k{font-size:9px; color:var(--text-faint); font-family:'JetBrains Mono',monospace; letter-spacing:0.07em;}
+  .stat-chip .v{font-size:13px; font-family:'JetBrains Mono',monospace; color:var(--text); margin-top:2px;}
+
+  .link-badge{
+    display:flex; align-items:center; gap:8px;
+    padding:6px 12px; border:1px solid var(--line-bright); border-radius:3px;
+    font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim);
+  }
+  .dot{width:6px; height:6px; border-radius:50%; background:var(--text-faint);}
+  .dot.live{background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 1.6s ease-in-out infinite;}
+  .dot.down{background:var(--red); box-shadow:0 0 8px var(--red);}
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:0.35}}
+
+  /* ---------- LAYOUT ---------- */
+  .shell{padding:24px 32px 56px; max-width:1560px; margin:0 auto;}
+
+  .mode-banner{
+    display:flex; align-items:center; gap:10px;
+    padding:9px 14px; margin-bottom:18px;
+    border:1px solid var(--line-bright); border-radius:4px;
+    background:var(--panel);
+    font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace;
+  }
+  .mode-banner b{color:var(--white); font-weight:600;}
+
+  .fault-banner{
+    display:none;
+    align-items:center; gap:12px;
+    padding:14px 18px; margin-bottom:18px;
+    border:1px solid var(--red); border-radius:4px;
+    background:rgba(226,114,106,0.06);
+    animation: faultFlash 1s ease-in-out infinite;
+  }
+  .fault-banner.active{display:flex;}
+  @keyframes faultFlash{0%,100%{border-color:var(--red);} 50%{border-color:rgba(226,114,106,0.35);}}
+  .fault-banner .fx{font-size:13px; font-weight:700; color:var(--red); font-family:'JetBrains Mono',monospace; letter-spacing:0.02em;}
+  .fault-banner .fd{font-size:11px; color:var(--text-dim);}
+
+  .grid-top{
+    display:grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap:14px;
+    margin-bottom:16px;
+  }
+
+  .kpi{
+    background:var(--panel);
+    border:1px solid var(--line-bright);
+    border-radius:6px;
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi::before{
+    content:''; position:absolute; top:0; left:0; width:100%; height:2px;
+    background:linear-gradient(90deg, var(--white), transparent);
+    opacity:0.35;
+  }
+  .kpi .k-label{font-size:10px; color:var(--text-faint); font-family:'JetBrains Mono',monospace; letter-spacing:0.07em; text-transform:uppercase;}
+  .kpi .k-value{font-size:26px; font-weight:600; font-family:'JetBrains Mono',monospace; margin-top:8px; color:var(--text);}
+  .kpi .k-unit{font-size:12px; color:var(--text-dim); margin-left:4px; font-weight:400;}
+  .kpi .k-sub{font-size:10px; color:var(--text-dim); margin-top:6px; font-family:'JetBrains Mono',monospace;}
+  .kpi.accent .k-value{color:var(--white);}
+  .kpi.warn .k-value{color:var(--amber);}
+
+  .panels{
+    display:grid;
+    grid-template-columns: 340px 1fr;
+    gap:16px;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line-bright);
+    border-radius:6px;
+    padding:18px 20px 20px;
+  }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px; padding-bottom:12px;
+    border-bottom:1px solid var(--line);
+  }
+  .panel-head h2{font-size:12px; font-weight:600; letter-spacing:0.02em; color:var(--text);}
+  .panel-head .h-tag{font-size:10px; color:var(--text-faint); font-family:'JetBrains Mono',monospace;}
+
+  /* ---------- 3D GAUGE ---------- */
+  .gauge-wrap{display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .gauge-stack{display:flex; flex-direction:column; gap:20px; width:100%;}
+
+  .rgauge{position:relative; width:100%; display:flex; flex-direction:column; align-items:center;}
+  .rgauge svg{filter:drop-shadow(0 4px 14px rgba(0,0,0,0.6));}
+  .rgauge .g-val{
+    position:absolute; top:52%; left:50%; transform:translate(-50%,-50%);
+    text-align:center;
+  }
+  .rgauge .g-val .num{font-size:28px; font-weight:700; font-family:'JetBrains Mono',monospace;}
+  .rgauge .g-val .lbl{font-size:9px; color:var(--text-faint); letter-spacing:0.07em; margin-top:2px; font-family:'JetBrains Mono',monospace;}
+
+  .soc-bars{display:flex; gap:3px; align-items:flex-end; height:36px; margin-top:6px;}
+  .soc-bars .bar{width:6px; border-radius:1px; background:var(--line-bright); transition:background 0.3s;}
+  .soc-bars .bar.on{background:var(--white); box-shadow:0 0 6px rgba(255,255,255,0.25);}
+
+  /* ---------- CHART AREA ---------- */
+  .chart-tabs{display:flex; gap:6px;}
+  .chart-tab{
+    font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--text-dim);
+    padding:4px 10px; border:1px solid var(--line); border-radius:3px; cursor:default;
+  }
+  .chart-tab.on{color:var(--white); border-color:var(--line-bright); background:rgba(255,255,255,0.04);}
+
+  canvas{width:100% !important; display:block;}
+  .chart-holder{position:relative;}
+
+  .chart-row{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
+
+  .legend-row{display:flex; gap:16px; margin-top:10px; flex-wrap:wrap;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-dim); font-family:'JetBrains Mono',monospace;}
+  .legend-swatch{width:10px; height:2px; border-radius:1px;}
+
+  /* custom chart tooltip bubble */
+  .chart-tooltip{
+    position:absolute; pointer-events:none; z-index:20;
+    background:#0a0a0b; border:1px solid var(--line-bright); border-radius:6px;
+    padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:11px;
+    box-shadow:0 10px 28px rgba(0,0,0,0.55);
+    opacity:0; transform:translate(-50%,-115%); transition:opacity 0.08s linear;
+    min-width:130px;
+  }
+  .chart-tooltip.show{opacity:1;}
+  .chart-tooltip .ct-time{color:var(--text-faint); font-size:9px; letter-spacing:0.05em; margin-bottom:6px; text-transform:uppercase;}
+  .chart-tooltip .ct-row{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:2px 0;}
+  .chart-tooltip .ct-row .ct-k{display:flex; align-items:center; gap:6px; color:var(--text-dim);}
+  .chart-tooltip .ct-dot{width:7px; height:7px; border-radius:50%; flex-shrink:0;}
+  .chart-tooltip .ct-v{color:var(--text); font-weight:600;}
+
+  .footer-note{
+    margin-top:20px; padding-top:14px; border-top:1px solid var(--line);
+    font-size:10px; color:var(--text-faint); font-family:'JetBrains Mono',monospace;
+    display:flex; justify-content:space-between;
+  }
+
+  /* ---------- SECTION HEADERS ---------- */
+  .section-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin:40px 0 16px; padding-bottom:12px; border-bottom:1px solid var(--line-bright);
+  }
+  .section-head h2{font-size:14px; font-weight:600; letter-spacing:-0.005em;}
+  .section-head p{font-size:11px; color:var(--text-faint); font-family:'JetBrains Mono',monospace;}
+
+  /* ---------- CIRCUIT DIAGRAM ---------- */
+  .circuit-panel{
+    background:var(--panel); border:1px solid var(--line-bright); border-radius:6px;
+    padding:22px 22px 18px; position:relative;
+  }
+  .circuit-scroll{width:100%; overflow-x:auto; overflow-y:visible; padding-bottom:6px;}
+  .circuit-scroll svg{display:block; min-width:1040px;}
+
+  .comp-hit{fill:transparent; cursor:pointer;}
+  .comp-group{transition:filter 0.15s ease;}
+  .comp-group.hovered{filter:drop-shadow(0 0 10px rgba(255,255,255,0.18));}
+  .comp-group.hovered .comp-outline{stroke:var(--white) !important;}
+
+  .wire-active{stroke-dasharray:5 4; animation:flowdash 0.9s linear infinite;}
+  @keyframes flowdash{to{stroke-dashoffset:-18;}}
+
+  .comp-label{font-family:'JetBrains Mono',monospace; font-size:10px; fill:var(--text-dim); letter-spacing:0.02em;}
+  .comp-tag{font-family:'JetBrains Mono',monospace; font-size:8.5px; fill:var(--text-faint); letter-spacing:0.06em;}
+
+  .circuit-legend{display:flex; gap:20px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--line);}
+  .circuit-legend .li{display:flex; align-items:center; gap:7px; font-size:10px; color:var(--text-dim); font-family:'JetBrains Mono',monospace;}
+  .circuit-legend .swatch{width:16px; height:2px; border-radius:1px;}
+  .circuit-legend .hint{margin-left:auto; color:var(--text-faint); font-size:10px;}
+
+  /* floating component tooltip */
+  .comp-tooltip{
+    position:fixed; pointer-events:none; z-index:100;
+    width:250px; background:#0a0a0b; border:1px solid var(--line-bright); border-radius:8px;
+    padding:14px 16px; box-shadow:0 16px 40px rgba(0,0,0,0.6);
+    opacity:0; transform:translateY(6px) scale(0.98); transition:opacity 0.12s ease, transform 0.12s ease;
+  }
+  .comp-tooltip.show{opacity:1; transform:translateY(0) scale(1);}
+  .comp-tooltip .ct-eyebrow{font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--grey-dim); letter-spacing:0.08em; margin-bottom:4px;}
+  .comp-tooltip .ct-title{font-size:13px; font-weight:600; color:var(--white); margin-bottom:10px;}
+  .comp-tooltip .ct-spec{display:flex; justify-content:space-between; gap:12px; font-size:11px; padding:4px 0; border-top:1px solid var(--line);}
+  .comp-tooltip .ct-spec:first-of-type{border-top:none;}
+  .comp-tooltip .ct-spec .sk{color:var(--text-dim); font-family:'Inter',sans-serif;}
+  .comp-tooltip .ct-spec .sv{color:var(--text); font-family:'JetBrains Mono',monospace; text-align:right;}
+
+  /* ---------- FLOWCHART ---------- */
+  .flow-panel{
+    background:var(--panel); border:1px solid var(--line-bright); border-radius:6px;
+    padding:24px 22px;
+  }
+  .flow-track{display:grid; grid-template-columns:repeat(5,1fr); gap:0; align-items:stretch;}
+  .flow-step{
+    position:relative; padding:18px 16px; border:1px solid var(--line-bright); border-radius:6px;
+    background:var(--panel-2); margin-right:22px; transition:border-color 0.2s, background 0.2s;
+  }
+  .flow-step:last-child{margin-right:0;}
+  .flow-step::after{
+    content:''; position:absolute; top:50%; right:-22px; transform:translateY(-50%);
+    width:0; height:0; border-top:6px solid transparent; border-bottom:6px solid transparent;
+    border-left:8px solid var(--line-bright);
+  }
+  .flow-step:last-child::after{display:none;}
+  .flow-num{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-faint); letter-spacing:0.06em;}
+  .flow-title{font-size:13px; font-weight:600; margin:8px 0 6px; color:var(--text);}
+  .flow-desc{font-size:11px; color:var(--text-dim); line-height:1.5;}
+  .flow-step.live{border-color:var(--green); background:rgba(127,217,154,0.05);}
+  .flow-step.live .flow-num{color:var(--green);}
+  .flow-step.fault{border-color:var(--red); background:rgba(226,114,106,0.06);}
+  .flow-step.fault .flow-num{color:var(--red);}
+
+  @media (max-width: 1100px){
+    .grid-top{grid-template-columns:repeat(2,1fr);}
+    .panels{grid-template-columns:1fr;}
+    .chart-row{grid-template-columns:1fr;}
+    .flow-track{grid-template-columns:1fr; gap:14px;}
+    .flow-step{margin-right:0;}
+    .flow-step::after{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">V</div>
+    <div class="brand-text">
+      <h1>Valkyrie BMS</h1>
+      <p>SIL TELEMETRY ENGINE · SCALES TO HIL VIA UART</p>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="stat-chip"><span class="k">UPTIME</span><span class="v mono" id="uptime">00:00:00</span></div>
+    <div class="stat-chip"><span class="k">PACKETS</span><span class="v mono" id="pktCount">0</span></div>
+    <div class="stat-chip"><span class="k">DROP RATE</span><span class="v mono" id="dropRate">0.0%</span></div>
+    <div class="link-badge"><span class="dot down" id="linkDot"></span><span id="linkText">LINK: OFFLINE</span></div>
+  </div>
+</div>
+
+<div class="shell">
+
+  <div class="mode-banner">
+    <span>ARCHITECTURE: </span><b>Software-in-the-Loop</b>
+    <span style="color:var(--text-faint)">— virtual MCU (Coulomb counting + fault logic in Python) → WebSocket → this dashboard. Identical packet schema drops onto real STM32 firmware over UART for hardware-in-the-loop.</span>
+  </div>
+
+  <div class="fault-banner" id="faultBanner">
+    <span class="fx" id="faultText">CRITICAL: THERMAL RUNAWAY</span>
+    <span class="fd">Fault flag asserted by virtual MCU · logged to SQLite with timestamp</span>
+  </div>
+
+  <div class="grid-top">
+    <div class="kpi">
+      <div class="k-label">Cycle ID</div>
+      <div class="k-value mono" id="kpiCycle">—</div>
+      <div class="k-sub" id="kpiMode">MODE: —</div>
+    </div>
+    <div class="kpi accent">
+      <div class="k-label">Terminal Voltage</div>
+      <div class="k-value mono"><span id="kpiVoltage">—</span><span class="k-unit">V</span></div>
+      <div class="k-sub" id="kpiVoltageDelta">Δ —</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Current Draw</div>
+      <div class="k-value mono"><span id="kpiCurrent">—</span><span class="k-unit">A</span></div>
+      <div class="k-sub" id="kpiCurrentDir">—</div>
+    </div>
+    <div class="kpi warn">
+      <div class="k-label">Temperature</div>
+      <div class="k-value mono"><span id="kpiTemp">—</span><span class="k-unit">°C</span></div>
+      <div class="k-sub" id="kpiTempStatus">NOMINAL</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Est. state of charge</div>
+      <div class="k-value mono"><span id="kpiSoc">—</span><span class="k-unit">%</span></div>
+      <div class="k-sub">Coulomb-counted</div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Cell state</h2>
+        <span class="h-tag">RANGE 2.5–4.5V</span>
+      </div>
+      <div class="gauge-stack">
+        <div class="rgauge" id="voltGaugeWrap">
+          <svg viewBox="0 0 200 120" width="100%">
+            <defs>
+              <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#e2726a"/>
+                <stop offset="45%" stop-color="#e0b45f"/>
+                <stop offset="100%" stop-color="#f2f2f0"/>
+              </linearGradient>
+              <filter id="glow"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1c1c1e" stroke-width="14" stroke-linecap="round"/>
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#arcGrad)" stroke-width="14" stroke-linecap="round" opacity="0.2"/>
+            <path id="voltArc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#arcGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251" filter="url(#glow)"/>
+            <line id="voltNeedle" x1="100" y1="100" x2="100" y2="30" stroke="#f2f2f0" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="100" cy="100" r="5" fill="#f2f2f0"/>
+          </svg>
+          <div class="g-val"><div class="num mono" id="voltGaugeNum">—</div><div class="lbl">VOLTS</div></div>
+        </div>
+
+        <div style="text-align:center;">
+          <div class="soc-bars" id="socBars"></div>
+          <div style="font-size:10px; color:var(--text-faint); margin-top:8px; font-family:'JetBrains Mono',monospace;">STATE OF CHARGE</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Live waveforms</h2>
+        <div class="chart-tabs">
+          <span class="chart-tab on">V / I</span>
+          <span class="chart-tab">THERMAL</span>
+        </div>
+      </div>
+      <div class="chart-holder">
+        <canvas id="mainChart" height="200"></canvas>
+        <div class="chart-tooltip" id="mainTooltip">
+          <div class="ct-time" id="mtTime">—</div>
+          <div class="ct-row"><span class="ct-k"><span class="ct-dot" style="background:#f2f2f0"></span>Voltage</span><span class="ct-v" id="mtV">—</span></div>
+          <div class="ct-row"><span class="ct-k"><span class="ct-dot" style="background:#e0b45f"></span>Current</span><span class="ct-v" id="mtI">—</span></div>
+        </div>
+      </div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-swatch" style="background:#f2f2f0"></span>Voltage (V)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#e0b45f"></span>Current (A)</div>
+      </div>
+      <div class="chart-row">
+        <div>
+          <div style="font-size:10px; color:var(--text-faint); margin-bottom:8px; font-family:'JetBrains Mono',monospace;">THERMAL PROFILE</div>
+          <canvas id="tempChart" height="120"></canvas>
+        </div>
+        <div>
+          <div style="font-size:10px; color:var(--text-faint); margin-bottom:8px; font-family:'JetBrains Mono',monospace;">POWER (V×I)</div>
+          <canvas id="powerChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CIRCUIT DIAGRAM ============ -->
+  <div class="section-head">
+    <h2>System architecture — circuit</h2>
+    <p>HOVER A COMPONENT FOR SPECS</p>
+  </div>
+
+  <div class="circuit-panel">
+    <div class="circuit-scroll">
+      <svg id="circuitSvg" viewBox="0 0 1360 430" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="dropShadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.55"/>
+          </filter>
+
+          <!-- battery cylinder -->
+          <linearGradient id="gCellWrap" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3d4148"/>
+            <stop offset="18%" stop-color="#1e2126"/>
+            <stop offset="50%" stop-color="#14161a"/>
+            <stop offset="82%" stop-color="#1e2126"/>
+            <stop offset="100%" stop-color="#3d4148"/>
+          </linearGradient>
+          <radialGradient id="gCapMetal" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#fbfbfa"/>
+            <stop offset="45%" stop-color="#b9b9b8"/>
+            <stop offset="100%" stop-color="#6c6c6d"/>
+          </radialGradient>
+          <linearGradient id="gCellEnd" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#57585c"/>
+            <stop offset="100%" stop-color="#232427"/>
+          </linearGradient>
+
+          <!-- generic metal / pins -->
+          <linearGradient id="gMetal" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f1f1ef"/>
+            <stop offset="50%" stop-color="#9a9a9d"/>
+            <stop offset="100%" stop-color="#f1f1ef"/>
+          </linearGradient>
+          <linearGradient id="gGoldPin" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#cdb27a"/>
+            <stop offset="50%" stop-color="#8a7245"/>
+            <stop offset="100%" stop-color="#cdb27a"/>
+          </linearGradient>
+
+          <!-- thermistor bead -->
+          <radialGradient id="gThermBead" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#f3c26a"/>
+            <stop offset="55%" stop-color="#c9862f"/>
+            <stop offset="100%" stop-color="#7a4e15"/>
+          </radialGradient>
+
+          <!-- sensor PCB (green) -->
+          <linearGradient id="gPcbSensor" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#243c2e"/>
+            <stop offset="55%" stop-color="#132118"/>
+            <stop offset="100%" stop-color="#0b120e"/>
+          </linearGradient>
+
+          <!-- MCU PCB (blue-pill style, desaturated) -->
+          <linearGradient id="gPcbMcu" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#25344a"/>
+            <stop offset="55%" stop-color="#141c29"/>
+            <stop offset="100%" stop-color="#0b0e14"/>
+          </linearGradient>
+
+          <!-- IC chip body -->
+          <radialGradient id="gChip" cx="30%" cy="25%" r="80%">
+            <stop offset="0%" stop-color="#2c2c2f"/>
+            <stop offset="55%" stop-color="#111113"/>
+            <stop offset="100%" stop-color="#000000"/>
+          </radialGradient>
+
+          <!-- MOSFET plastic body -->
+          <linearGradient id="gFet" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3a3a3d"/>
+            <stop offset="45%" stop-color="#171718"/>
+            <stop offset="100%" stop-color="#050505"/>
+          </linearGradient>
+
+          <!-- host screen -->
+          <linearGradient id="gScreenBezel" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#2a2a2d"/>
+            <stop offset="100%" stop-color="#101012"/>
+          </linearGradient>
+          <radialGradient id="gScreenGlow" cx="50%" cy="35%" r="75%">
+            <stop offset="0%" stop-color="#1c2733"/>
+            <stop offset="60%" stop-color="#0a0d10"/>
+            <stop offset="100%" stop-color="#020202"/>
+          </radialGradient>
+
+          <linearGradient id="gGloss" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.16"/>
+            <stop offset="35%" stop-color="#ffffff" stop-opacity="0.02"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+
+        <!-- ===== GND RAIL ===== -->
+        <line x1="60" y1="372" x2="1230" y2="372" stroke="var(--w-gnd)" stroke-width="2"/>
+        <text x="1236" y="376" class="comp-tag">GND</text>
+
+        <!-- ===== WIRES (drawn first, under components) ===== -->
+        <!-- power: cell(+) -> sensor -->
+        <path d="M 227 190 L 260 190" stroke="var(--w-power)" stroke-width="2.5" fill="none"/>
+        <!-- power: sensor -> mcu -->
+        <path d="M 400 190 L 452 190" stroke="var(--w-power)" stroke-width="2.5" fill="none"/>
+        <!-- power: mcu -> fet (switched V+) -->
+        <path d="M 660 190 L 800 190" stroke="var(--w-power)" stroke-width="2.5" fill="none"/>
+        <!-- power: fet -> return loop down to GND rail -->
+        <path d="M 858 254 L 858 372" stroke="var(--w-power)" stroke-width="2.5" fill="none"/>
+        <!-- gnd: cell(-) down to rail -->
+        <path d="M 68 226 L 68 372" stroke="var(--w-gnd)" stroke-width="2" fill="none"/>
+        <!-- gnd: sensor down to rail -->
+        <path d="M 330 230 L 330 372" stroke="var(--w-gnd)" stroke-width="2" fill="none"/>
+        <!-- gnd: mcu down to rail -->
+        <path d="M 556 306 L 556 372" stroke="var(--w-gnd)" stroke-width="2" fill="none"/>
+        <!-- gnd: host down to rail -->
+        <path d="M 1160 281 L 1160 372" stroke="var(--w-gnd)" stroke-width="2" fill="none"/>
+        <!-- signal: sensor -> mcu (I2C, dashed white) -->
+        <path d="M 340 150 L 340 118 L 452 118" class="wire-active" stroke="var(--w-signal)" stroke-width="1.6" fill="none"/>
+        <!-- thermal: thermistor -> mcu -->
+        <path d="M 150 79 C 260 34, 420 34, 500 90 L 500 150" stroke="var(--w-thermal)" stroke-width="1.6" fill="none" stroke-dasharray="4 4"/>
+        <!-- digital: mcu -> host (UART/WebSocket) -->
+        <path d="M 660 150 L 700 150 L 700 96 L 1080 96 L 1080 150" class="wire-active" stroke="var(--w-signal)" stroke-width="1.6" fill="none"/>
+        <!-- gate control: mcu -> fet -->
+        <path d="M 556 262 L 556 275 L 812 275 L 812 254" stroke="var(--w-signal)" stroke-width="1.4" stroke-dasharray="2 4" fill="none"/>
+
+        <!-- pin dots -->
+        <circle cx="227" cy="190" r="3" fill="var(--w-power)"/>
+        <circle cx="260" cy="190" r="3" fill="var(--w-power)"/>
+        <circle cx="400" cy="190" r="3" fill="var(--w-power)"/>
+        <circle cx="452" cy="190" r="3" fill="var(--w-power)"/>
+        <circle cx="660" cy="190" r="3" fill="var(--w-power)"/>
+        <circle cx="800" cy="190" r="3" fill="var(--w-power)"/>
+
+        <!-- ===== COMPONENT: 18650 CELL (cylinder render) ===== -->
+        <g class="comp-group" id="comp-cell">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <!-- negative flat end cap -->
+            <ellipse cx="68" cy="190" rx="9" ry="36" fill="url(#gCellEnd)"/>
+            <!-- cylindrical wrap body -->
+            <rect x="68" y="154" width="132" height="72" fill="url(#gCellWrap)"/>
+            <ellipse cx="200" cy="190" rx="9" ry="36" fill="url(#gCellWrap)"/>
+            <!-- printed capacity band -->
+            <rect x="108" y="169" width="58" height="16" rx="2" fill="#0a0a0a" opacity="0.55"/>
+            <text x="137" y="181" text-anchor="middle" class="comp-tag" fill="#f2f2f0" font-size="8.5" letter-spacing="0.06em">3.7V · 2500mAh</text>
+            <!-- thin accent rings -->
+            <rect x="96" y="154" width="3" height="72" fill="#000" opacity="0.35"/>
+            <rect x="178" y="154" width="3" height="72" fill="#000" opacity="0.35"/>
+            <!-- specular highlight streak -->
+            <rect x="78" y="160" width="112" height="9" rx="4" fill="#ffffff" opacity="0.10"/>
+            <!-- positive terminal button -->
+            <ellipse cx="200" cy="190" rx="9" ry="20" fill="url(#gCapMetal)"/>
+            <circle cx="216" cy="190" r="11" fill="url(#gCapMetal)" stroke="#4a4a4d" stroke-width="0.6"/>
+            <circle cx="216" cy="190" r="4" fill="#3a3a3c" opacity="0.5"/>
+            <text x="216" y="167" text-anchor="middle" class="comp-tag">+</text>
+            <text x="68" y="167" text-anchor="middle" class="comp-tag">−</text>
+          </g>
+          <rect class="comp-hit" x="52" y="140" width="180" height="100"/>
+          <text x="137" y="248" text-anchor="middle" class="comp-label">18650 Li-ion Cell</text>
+        </g>
+
+        <!-- ===== COMPONENT: NTC THERMISTOR (epoxy bead render) ===== -->
+        <g class="comp-group" id="comp-thermistor">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <line x1="144" y1="112" x2="130" y2="152" stroke="url(#gMetal)" stroke-width="1.6"/>
+            <line x1="156" y1="112" x2="168" y2="152" stroke="url(#gMetal)" stroke-width="1.6"/>
+            <ellipse cx="150" cy="98" rx="16" ry="19" fill="url(#gThermBead)" stroke="#5c3a10" stroke-width="0.8"/>
+            <ellipse cx="144" cy="90" rx="5" ry="7" fill="#ffffff" opacity="0.35"/>
+          </g>
+          <rect class="comp-hit" x="120" y="72" width="60" height="66"/>
+          <text x="150" y="60" text-anchor="middle" class="comp-label">NTC Thermistor</text>
+        </g>
+
+        <!-- ===== COMPONENT: CURRENT/VOLTAGE SENSOR (INA219-style PCB render) ===== -->
+        <g class="comp-group" id="comp-sensor">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <rect x="260" y="150" width="140" height="80" rx="5" fill="url(#gPcbSensor)" stroke="#33443a" stroke-width="1"/>
+            <rect x="260" y="150" width="140" height="80" rx="5" fill="url(#gGloss)"/>
+            <!-- silkscreen outline traces -->
+            <path d="M 268 158 h 40 M 268 222 h 40 M 392 158 h -40 M 392 222 h -40" stroke="#3a5546" stroke-width="0.8" fill="none" opacity="0.7"/>
+            <!-- mounting holes -->
+            <circle cx="270" cy="160" r="4" fill="#0b120e" stroke="url(#gMetal)" stroke-width="1"/>
+            <circle cx="390" cy="160" r="4" fill="#0b120e" stroke="url(#gMetal)" stroke-width="1"/>
+            <circle cx="270" cy="220" r="4" fill="#0b120e" stroke="url(#gMetal)" stroke-width="1"/>
+            <circle cx="390" cy="220" r="4" fill="#0b120e" stroke="url(#gMetal)" stroke-width="1"/>
+            <!-- IC chip (SOIC) -->
+            <rect x="284" y="172" width="46" height="30" rx="2" fill="url(#gChip)" stroke="#000" stroke-width="0.6"/>
+            <g stroke="url(#gMetal)" stroke-width="1.4">
+              <line x1="284" y1="178" x2="276" y2="178"/><line x1="284" y1="188" x2="276" y2="188"/><line x1="284" y1="196" x2="276" y2="196"/>
+              <line x1="330" y1="178" x2="338" y2="178"/><line x1="330" y1="188" x2="338" y2="188"/><line x1="330" y1="196" x2="338" y2="196"/>
+            </g>
+            <circle cx="290" cy="178" r="1.4" fill="#555"/>
+            <text x="307" y="190" text-anchor="middle" class="comp-tag" fill="#cfe8d8" font-size="7.5">INA219</text>
+            <!-- shunt resistor -->
+            <rect x="345" y="180" width="34" height="14" rx="1.5" fill="#2b2b2c" stroke="url(#gMetal)" stroke-width="1"/>
+            <rect x="345" y="180" width="4" height="14" fill="url(#gMetal)"/>
+            <rect x="375" y="180" width="4" height="14" fill="url(#gMetal)"/>
+            <!-- header pins -->
+            <rect x="266" y="150" width="6" height="10" fill="url(#gGoldPin)"/>
+            <rect x="388" y="150" width="6" height="10" fill="url(#gGoldPin)"/>
+            <rect x="266" y="220" width="6" height="10" fill="url(#gGoldPin)"/>
+            <rect x="388" y="220" width="6" height="10" fill="url(#gGoldPin)"/>
+          </g>
+          <rect class="comp-hit" x="256" y="146" width="150" height="90"/>
+          <text x="330" y="248" text-anchor="middle" class="comp-label">Current / Voltage Sensor</text>
+        </g>
+
+        <!-- ===== COMPONENT: VIRTUAL MCU (STM32 blue-pill style render) ===== -->
+        <g class="comp-group" id="comp-mcu">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <rect x="452" y="150" width="208" height="156" rx="5" fill="url(#gPcbMcu)" stroke="#3a3f4a" stroke-width="1"/>
+            <rect x="452" y="150" width="208" height="156" rx="5" fill="url(#gGloss)"/>
+            <!-- mounting holes -->
+            <circle cx="464" cy="162" r="4" fill="#0a0d13" stroke="url(#gMetal)" stroke-width="1"/>
+            <circle cx="648" cy="162" r="4" fill="#0a0d13" stroke="url(#gMetal)" stroke-width="1"/>
+            <!-- main MCU chip -->
+            <rect x="518" y="186" width="76" height="76" rx="3" fill="url(#gChip)" stroke="#000" stroke-width="0.8"/>
+            <rect x="530" y="198" width="52" height="52" rx="1" fill="none" stroke="#3a3a3d" stroke-width="0.6"/>
+            <circle cx="527" cy="193" r="1.6" fill="#666"/>
+            <text x="556" y="220" text-anchor="middle" class="comp-tag" fill="#e9e9e7" font-size="8">VIRTUAL</text>
+            <text x="556" y="232" text-anchor="middle" class="comp-tag" fill="#e9e9e7" font-size="8">MCU</text>
+            <text x="556" y="244" text-anchor="middle" class="comp-tag" fill="#7a7a7d" font-size="6.5">STM32F103-class</text>
+            <!-- pin legs around chip -->
+            <g stroke="url(#gMetal)" stroke-width="1.6">
+              <line x1="518" y1="196" x2="500" y2="196"/><line x1="518" y1="210" x2="500" y2="210"/>
+              <line x1="518" y1="224" x2="500" y2="224"/><line x1="518" y1="238" x2="500" y2="238"/><line x1="518" y1="252" x2="500" y2="252"/>
+              <line x1="594" y1="196" x2="612" y2="196"/><line x1="594" y1="210" x2="612" y2="210"/>
+              <line x1="594" y1="224" x2="612" y2="224"/><line x1="594" y1="238" x2="612" y2="238"/><line x1="594" y1="252" x2="612" y2="252"/>
+              <line x1="532" y1="186" x2="532" y2="172"/><line x1="556" y1="186" x2="556" y2="172"/><line x1="580" y1="186" x2="580" y2="172"/>
+            </g>
+            <!-- crystal oscillator -->
+            <rect x="612" y="186" width="26" height="16" rx="2" fill="url(#gMetal)" stroke="#5a5a5c" stroke-width="0.8"/>
+            <!-- micro-USB connector -->
+            <rect x="500" y="296" width="34" height="12" rx="2" fill="url(#gMetal)" stroke="#5a5a5c" stroke-width="0.8"/>
+            <rect x="506" y="299" width="22" height="6" fill="#1a1a1c"/>
+            <!-- header pin row -->
+            <g fill="url(#gGoldPin)">
+              <rect x="462" y="280" width="4" height="12"/><rect x="472" y="280" width="4" height="12"/>
+              <rect x="482" y="280" width="4" height="12"/><rect x="620" y="280" width="4" height="12"/>
+              <rect x="630" y="280" width="4" height="12"/><rect x="640" y="280" width="4" height="12"/>
+            </g>
+            <text x="605" y="298" text-anchor="middle" class="comp-tag" font-size="7">UART</text>
+          </g>
+          <rect class="comp-hit" x="448" y="146" width="216" height="166"/>
+          <text x="556" y="326" text-anchor="middle" class="comp-label">Virtual MCU · Coulomb + Fault Logic</text>
+        </g>
+
+        <!-- ===== COMPONENT: MOSFET / PROTECTION SWITCH (TO-220 render) ===== -->
+        <g class="comp-group" id="comp-mosfet">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <!-- metal mounting tab -->
+            <rect x="798" y="140" width="74" height="18" rx="2" fill="url(#gMetal)" stroke="#8a8a8c" stroke-width="0.6"/>
+            <circle cx="835" cy="149" r="4" fill="#0a0a0a" stroke="#6c6c6d" stroke-width="0.8"/>
+            <!-- black plastic body -->
+            <rect x="800" y="156" width="70" height="76" rx="5" fill="url(#gFet)" stroke="#050505" stroke-width="1"/>
+            <rect x="800" y="156" width="70" height="76" rx="5" fill="url(#gGloss)"/>
+            <rect x="810" y="168" width="50" height="34" rx="2" fill="none" stroke="#3a3a3a" stroke-width="0.6"/>
+            <text x="835" y="188" text-anchor="middle" class="comp-tag" fill="#c9c9c9" font-size="7.5">IRLZ44N</text>
+            <!-- bent leads -->
+            <path d="M 812 232 C 812 246, 812 246, 812 254" stroke="url(#gMetal)" stroke-width="2.4" fill="none"/>
+            <path d="M 835 232 L 835 254" stroke="url(#gMetal)" stroke-width="2.4" fill="none"/>
+            <path d="M 858 232 C 858 246, 858 246, 858 254" stroke="url(#gMetal)" stroke-width="2.4" fill="none"/>
+            <text x="812" y="266" text-anchor="middle" class="comp-tag" font-size="7">G</text>
+            <text x="835" y="266" text-anchor="middle" class="comp-tag" font-size="7">D</text>
+            <text x="858" y="266" text-anchor="middle" class="comp-tag" font-size="7">S</text>
+          </g>
+          <rect class="comp-hit" x="792" y="136" width="90" height="130"/>
+          <text x="835" y="288" text-anchor="middle" class="comp-label">Protection MOSFET</text>
+        </g>
+
+        <!-- ===== COMPONENT: HOST / WEBSOCKET SERVER (monitor render) ===== -->
+        <g class="comp-group" id="comp-host">
+          <g class="comp-outline" filter="url(#dropShadow)">
+            <rect x="1080" y="150" width="160" height="106" rx="8" fill="url(#gScreenBezel)" stroke="#3a3a3d" stroke-width="1.2"/>
+            <rect x="1080" y="150" width="160" height="106" rx="8" fill="url(#gGloss)"/>
+            <rect x="1092" y="162" width="136" height="70" rx="3" fill="url(#gScreenGlow)" stroke="#2a2a2c" stroke-width="1"/>
+            <polyline points="1100,206 1120,190 1136,214 1156,182 1176,200 1220,196" fill="none" stroke="#f2f2f0" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+            <circle id="hostLed" cx="1220" cy="169" r="3" fill="var(--red)"/>
+            <!-- stand -->
+            <rect x="1150" y="256" width="20" height="20" fill="#1c1c1e"/>
+            <rect x="1120" y="274" width="80" height="7" rx="3.5" fill="#161616" stroke="#2a2a2c" stroke-width="0.8"/>
+          </g>
+          <rect class="comp-hit" x="1076" y="146" width="168" height="140"/>
+          <text x="1160" y="308" text-anchor="middle" class="comp-label">Telemetry Host (WebSocket)</text>
+        </g>
+
+      </svg>
+    </div>
+
+    <div class="circuit-legend">
+      <div class="li"><span class="swatch" style="background:var(--w-power)"></span>Power (V+)</div>
+      <div class="li"><span class="swatch" style="background:var(--w-gnd)"></span>Ground</div>
+      <div class="li"><span class="swatch" style="background:var(--w-signal); border-top:1px dashed var(--w-signal);"></span>Digital signal (I²C / UART)</div>
+      <div class="li"><span class="swatch" style="background:var(--w-thermal); border-top:1px dashed var(--w-thermal);"></span>Thermal sense</div>
+      <div class="hint">Diagram is schematic — not to scale</div>
+    </div>
+  </div>
+
+  <div class="comp-tooltip" id="compTooltip">
+    <div class="ct-eyebrow" id="ctEyebrow">COMPONENT</div>
+    <div class="ct-title" id="ctTitle">—</div>
+    <div id="ctSpecs"></div>
+  </div>
+
+  <!-- ============ FLOWCHART ============ -->
+  <div class="section-head">
+    <h2>Signal path — flowchart</h2>
+    <p>SENSE → PROCESS → PROTECT → TRANSMIT → VISUALIZE</p>
+  </div>
+
+  <div class="flow-panel">
+    <div class="flow-track">
+      <div class="flow-step" id="flowSense">
+        <div class="flow-num">01 · SENSE</div>
+        <div class="flow-title">Cell &amp; sensors</div>
+        <div class="flow-desc">Voltage, current and temperature sampled from the 18650 cell via the INA219 sensor and NTC thermistor.</div>
+      </div>
+      <div class="flow-step" id="flowProcess">
+        <div class="flow-num">02 · PROCESS</div>
+        <div class="flow-title">Virtual MCU</div>
+        <div class="flow-desc">Coulomb counting estimates state of charge; identical packet schema is HIL-ready for real STM32 firmware.</div>
+      </div>
+      <div class="flow-step" id="flowProtect">
+        <div class="flow-num">03 · PROTECT</div>
+        <div class="flow-title">Fault logic</div>
+        <div class="flow-desc">Thresholds on voltage and temperature trigger the protection MOSFET and assert a fault flag.</div>
+      </div>
+      <div class="flow-step" id="flowTransmit">
+        <div class="flow-num">04 · TRANSMIT</div>
+        <div class="flow-title">WebSocket stream</div>
+        <div class="flow-desc">JSON telemetry packets are pushed in real time from the FastAPI backend to connected clients.</div>
+      </div>
+      <div class="flow-step" id="flowVisualize">
+        <div class="flow-num">05 · VISUALIZE</div>
+        <div class="flow-title">This dashboard</div>
+        <div class="flow-desc">Waveforms, gauges and the circuit view render each packet live, with no polling.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <span>VALKYRIE-BMS · NASA PCoE dataset replay · WebSocket telemetry</span>
+    <span id="clock">—</span>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+/* ============ CONFIG ============ */
+const WS_URL = "ws://127.0.0.1:8000/ws/telemetry"; // point this at your FastAPI WebSocket
+const USE_DEMO_FEED = true; // set false once your WebSocket backend is running
+
+/* ============ STATE ============ */
+let pktCount = 0, dropCount = 0, startTime = Date.now();
+const MAX_POINTS = 60;
+const hist = { t: [], v: [], i: [], temp: [], p: [] };
+
+/* ============ CHART SETUP ============ */
+Chart.defaults.color = '#8c8c8f';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 10;
+
+function baseGrid(){ return { color:'#1c1c1e', drawTicks:false }; }
+
+/* ---- custom bubble tooltip for the main V/I chart ---- */
+const mainTooltipEl = document.getElementById('mainTooltip');
+function externalMainTooltip(context){
+  const tp = context.tooltip;
+  if(!tp || tp.opacity === 0){ mainTooltipEl.classList.remove('show'); return; }
+  const dp = tp.dataPoints || [];
+  const timeLabel = dp.length ? dp[0].label : '';
+  document.getElementById('mtTime').textContent = timeLabel;
+  dp.forEach(p=>{
+    if(p.datasetIndex === 0) document.getElementById('mtV').textContent = Number(p.raw).toFixed(3) + ' V';
+    if(p.datasetIndex === 1) document.getElementById('mtI').textContent = Number(p.raw).toFixed(3) + ' A';
+  });
+  const holder = context.chart.canvas.parentNode;
+  const { offsetLeft, offsetTop } = holder;
+  mainTooltipEl.style.left = (offsetLeft + tp.caretX) + 'px';
+  mainTooltipEl.style.top = (offsetTop + tp.caretY) + 'px';
+  mainTooltipEl.classList.add('show');
+}
+
+const mainChart = new Chart(document.getElementById('mainChart'), {
+  type:'line',
+  data:{ labels:[], datasets:[
+    { label:'V', data:[], borderColor:'#f2f2f0', backgroundColor:'rgba(242,242,240,0.06)', fill:true, tension:0.35, pointRadius:0, borderWidth:2, yAxisID:'y' },
+    { label:'I', data:[], borderColor:'#e0b45f', borderDash:[3,3], fill:false, tension:0.35, pointRadius:0, borderWidth:1.5, yAxisID:'y1' }
+  ]},
+  options:{
+    responsive:true, animation:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{
+      legend:{display:false},
+      tooltip:{ enabled:false, external:externalMainTooltip }
+    },
+    scales:{
+      x:{ grid: baseGrid(), ticks:{maxTicksLimit:6} },
+      y:{ position:'left', grid: baseGrid(), title:{display:true,text:'V',color:'#f2f2f0'} },
+      y1:{ position:'right', grid:{display:false}, title:{display:true,text:'A',color:'#e0b45f'} }
+    }
+  }
+});
+
+function miniChart(id, color){
+  return new Chart(document.getElementById(id), {
+    type:'line',
+    data:{ labels:[], datasets:[{ data:[], borderColor:color, backgroundColor:color+'18', fill:true, tension:0.35, pointRadius:0, borderWidth:1.5 }]},
+    options:{
+      responsive:true, animation:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#0a0a0b', borderColor:'#303033', borderWidth:1,
+          titleFont:{family:"'JetBrains Mono',monospace", size:10},
+          bodyFont:{family:"'JetBrains Mono',monospace", size:11},
+          padding:10, displayColors:false, cornerRadius:6
+        }
+      },
+      scales:{ x:{display:false}, y:{grid:baseGrid(), ticks:{maxTicksLimit:4}} }
+    }
+  });
+}
+const tempChart = miniChart('tempChart', '#e2726a');
+const powerChart = miniChart('powerChart', '#7fd99a');
+
+/* ============ SOC BAR RENDER ============ */
+const socBarsEl = document.getElementById('socBars');
+for(let i=0;i<20;i++){ const b=document.createElement('div'); b.className='bar'; b.style.height=(6+i*1.4)+'px'; socBarsEl.appendChild(b); }
+function setSoc(pct){
+  const bars = socBarsEl.children, on = Math.round((pct/100)*bars.length);
+  for(let i=0;i<bars.length;i++) bars[i].classList.toggle('on', i<on);
+}
+
+/* ============ GAUGE ============ */
+const ARC_LEN = 251;
+function setVoltGauge(v){
+  const pct = Math.max(0, Math.min(1, (v-2.5)/(4.5-2.5)));
+  document.getElementById('voltArc').style.strokeDashoffset = ARC_LEN - (ARC_LEN*pct);
+  const angle = -90 + pct*180;
+  const rad = angle*Math.PI/180;
+  const x2 = 100 + 62*Math.cos(rad), y2 = 100 + 62*Math.sin(rad);
+  document.getElementById('voltNeedle').setAttribute('x2', x2);
+  document.getElementById('voltNeedle').setAttribute('y2', y2);
+  document.getElementById('voltGaugeNum').textContent = v.toFixed(2);
+}
+
+/* ============ CIRCUIT COMPONENT TOOLTIPS ============ */
+const componentInfo = {
+  'comp-cell': {
+    eyebrow: 'ENERGY STORAGE', title: '18650 Li-ion Cell',
+    specs: [['Nominal voltage','3.7 V'],['Operating range','2.50 – 4.50 V'],['Capacity','2500 mAh'],['Chemistry','LiCoO₂'],['Data source','NASA PCoE replay']]
+  },
+  'comp-thermistor': {
+    eyebrow: 'TEMPERATURE SENSE', title: 'NTC Thermistor',
+    specs: [['Type','NTC, β≈3950'],['Mount point','Cell casing surface'],['Feeds','MCU ADC channel'],['Elevated trip','> 45 °C']]
+  },
+  'comp-sensor': {
+    eyebrow: 'CURRENT / VOLTAGE SENSING', title: 'INA219-style Sensor',
+    specs: [['Interface','I²C'],['Sense method','Shunt resistor'],['Resolution','≈ 1 mA'],['Output','V, I to MCU bus']]
+  },
+  'comp-mcu': {
+    eyebrow: 'PROCESSING', title: 'Virtual MCU',
+    specs: [['SIL mode','Coulomb counting + fault logic in Python'],['HIL-ready','Same packet schema over UART'],['Target part','STM32F103-class'],['Publishes to','WebSocket telemetry stream']]
+  },
+  'comp-mosfet': {
+    eyebrow: 'PROTECTION', title: 'Power Switch (MOSFET)',
+    specs: [['Driven by','MCU fault logic'],['Trigger','Overvoltage / thermal runaway'],['Action','Opens discharge path'],['State','Latched until fault clears']]
+  },
+  'comp-host': {
+    eyebrow: 'TELEMETRY HOST', title: 'WebSocket Server',
+    specs: [['Backend','FastAPI'],['Endpoint','ws://127.0.0.1:8000/ws/telemetry'],['Payload','JSON packet per sample'],['Consumers','This dashboard, logging, SQLite']]
+  }
+};
+
+const compTooltip = document.getElementById('compTooltip');
+const ctEyebrow = document.getElementById('ctEyebrow');
+const ctTitle = document.getElementById('ctTitle');
+const ctSpecs = document.getElementById('ctSpecs');
+
+document.querySelectorAll('.comp-group').forEach(g=>{
+  const info = componentInfo[g.id];
+  if(!info) return;
+  g.addEventListener('mouseenter', ()=>{
+    g.classList.add('hovered');
+    ctEyebrow.textContent = info.eyebrow;
+    ctTitle.textContent = info.title;
+    ctSpecs.innerHTML = info.specs.map(([k,v])=>`<div class="ct-spec"><span class="sk">${k}</span><span class="sv">${v}</span></div>`).join('');
+    compTooltip.classList.add('show');
+  });
+  g.addEventListener('mousemove', (e)=>{
+    const pad = 18;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if(x + 260 > vw) x = e.clientX - 260 - pad;
+    if(y + 200 > vh) y = e.clientY - 200;
+    compTooltip.style.left = x + 'px';
+    compTooltip.style.top = y + 'px';
+  });
+  g.addEventListener('mouseleave', ()=>{
+    g.classList.remove('hovered');
+    compTooltip.classList.remove('show');
+  });
+});
+
+/* ============ MAIN UPDATE ============ */
+let lastVoltage = null;
+function pushPoint(d){
+  pktCount++;
+  document.getElementById('pktCount').textContent = pktCount;
+  document.getElementById('dropRate').textContent = (dropCount/(pktCount+dropCount)*100 || 0).toFixed(1)+'%';
+
+  const label = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  [hist.t].forEach(a=>{ a.push(label); if(a.length>MAX_POINTS) a.shift(); });
+  hist.v.push(d.voltage); hist.i.push(d.current); hist.temp.push(d.temperature);
+  hist.p.push(Math.abs(d.voltage*d.current));
+  [hist.v,hist.i,hist.temp,hist.p].forEach(a=>{ if(a.length>MAX_POINTS) a.shift(); });
+
+  mainChart.data.labels = hist.t;
+  mainChart.data.datasets[0].data = hist.v;
+  mainChart.data.datasets[1].data = hist.i;
+  mainChart.update('none');
+
+  tempChart.data.labels = hist.t; tempChart.data.datasets[0].data = hist.temp; tempChart.update('none');
+  powerChart.data.labels = hist.t; powerChart.data.datasets[0].data = hist.p; powerChart.update('none');
+
+  document.getElementById('kpiCycle').textContent = d.cycle_id;
+  document.getElementById('kpiMode').textContent = 'MODE: ' + (d.mode||'—').toUpperCase();
+  document.getElementById('kpiVoltage').textContent = d.voltage.toFixed(3);
+  document.getElementById('kpiCurrent').textContent = d.current.toFixed(3);
+  document.getElementById('kpiCurrentDir').textContent = d.current < 0 ? 'DISCHARGING' : 'CHARGING';
+  document.getElementById('kpiTemp').textContent = d.temperature.toFixed(2);
+  document.getElementById('kpiTempStatus').textContent = d.temperature > 45 ? 'ELEVATED' : 'NOMINAL';
+
+  if(lastVoltage !== null){
+    const delta = d.voltage - lastVoltage;
+    document.getElementById('kpiVoltageDelta').textContent = 'Δ ' + (delta>=0?'+':'') + delta.toFixed(4) + 'V';
+  }
+  lastVoltage = d.voltage;
+
+  const socPct = Math.max(0, Math.min(100, ((d.voltage-2.5)/(4.2-2.5))*100));
+  document.getElementById('kpiSoc').textContent = socPct.toFixed(1);
+  setSoc(socPct);
+  setVoltGauge(d.voltage);
+
+  const isFault = !!d.fault;
+  document.getElementById('faultBanner').classList.toggle('active', isFault);
+  if(isFault) document.getElementById('faultText').textContent = d.fault_message || 'CRITICAL: FAULT DETECTED';
+
+  document.getElementById('flowProtect').classList.toggle('fault', isFault);
+  document.getElementById('flowSense').classList.toggle('live', !isFault);
+  document.getElementById('flowProcess').classList.toggle('live', !isFault);
+}
+
+/* ============ LINK STATUS ============ */
+function setLink(up){
+  document.getElementById('linkDot').className = 'dot ' + (up?'live':'down');
+  document.getElementById('linkText').textContent = 'LINK: ' + (up?'ACTIVE':'OFFLINE');
+  document.getElementById('flowTransmit').classList.toggle('live', up);
+  document.getElementById('flowVisualize').classList.toggle('live', up);
+  const led = document.getElementById('hostLed');
+  if(led) led.setAttribute('fill', up ? 'var(--green)' : 'var(--red)');
+}
+
+/* ============ UPTIME / CLOCK ============ */
+setInterval(()=>{
+  const s = Math.floor((Date.now()-startTime)/1000);
+  const hh=String(Math.floor(s/3600)).padStart(2,'0'), mm=String(Math.floor(s%3600/60)).padStart(2,'0'), ss=String(s%60).padStart(2,'0');
+  document.getElementById('uptime').textContent = `${hh}:${mm}:${ss}`;
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-GB');
+}, 1000);
+
+/* ============ WEBSOCKET (real backend) ============ */
+function connectWS(){
+  try{
+    const ws = new WebSocket(WS_URL);
+    ws.onopen = ()=> setLink(true);
+    ws.onclose = ()=> { setLink(false); setTimeout(connectWS, 2000); };
+    ws.onerror = ()=> ws.close();
+    ws.onmessage = (evt)=>{ try{ pushPoint(JSON.parse(evt.data)); }catch(e){} };
+  }catch(e){ setLink(false); }
+}
+
+/* ============ DEMO FEED (no backend needed — remove when WS is wired) ============ */
+function demoFeed(){
+  setLink(true);
+  let t=0, cycle=1, fault=false;
+  setInterval(()=>{
+    t += 0.1;
+    const base = 4.1 - (t*0.01)%1.6;
+    const noise = (Math.random()-0.5)*0.01;
+    const current = -0.995 + (Math.random()-0.5)*0.02;
+    const temp = 10 + (t*0.15)%25 + (Math.random()-0.5)*0.3;
+    fault = Math.random() < 0.015;
+    pushPoint({
+      cycle_id: cycle, mode:'discharge',
+      voltage: Math.max(2.5, base+noise),
+      current: current,
+      temperature: temp,
+      fault: fault,
+      fault_message: fault ? 'CRITICAL: OVERVOLTAGE THRESHOLD EXCEEDED' : ''
+    });
+  }, 300);
+}
+
+if(USE_DEMO_FEED){ demoFeed(); } else { connectWS(); }
+</script>
+</body>
+</html>

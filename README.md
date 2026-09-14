@@ -1,40 +1,41 @@
-# Valkyrie-BMS: Software-in-the-Loop Battery Telemetry & Verification Framework
+# Valkyrie-BMS: IoT Battery Telemetry & Monitoring Platform
 
-This project implements a **Software-in-the-Loop (SIL) simulation framework** for Battery Management System (BMS) verification, built around NASA's PCoE battery aging datasets to reproduce real-world cell behavior (Voltage, Current, Temperature) at controlled frequencies.
+Valkyrie-BMS is an **IoT-style telemetry platform** for Battery Management System (BMS) monitoring. It streams real-time voltage, current, and temperature data — replayed from NASA's PCoE battery aging datasets — through a WebSocket pipeline into a live dashboard, the same pattern used in production IoT device monitoring (sensor node → broker → live UI).
 
-The system is designed with a **hardware-portable packet schema**, so the same telemetry format and fault-logic contract used here could be dropped onto a real MCU (e.g. STM32) over UART for Hardware-in-the-Loop testing — that path is a design goal / next step, not something benchmarked on physical hardware yet.
+The telemetry schema is designed to be **device-portable**: it uses a compact, checksum-framed packet format compatible with UART transmission, so the same "sensor node" logic could run on a real embedded device (e.g. STM32) instead of the current Python simulation, without changing the broker or dashboard.
 
 ## 🚀 Overview
 
-The framework replays physics-accurate battery data to validate BMS state-estimation (SoC) and fault-detection logic under dynamic load conditions, without requiring physical hardware in the loop.
+The platform simulates a battery "sensor node" pushing telemetry at controlled intervals, and validates the same state-estimation (SoC) and fault-detection logic that would run on a real IoT edge device — useful for building and testing the cloud/dashboard side of an IoT product before hardware is ready.
 
 ### Core Capabilities
 
-* **Data Pipeline**: Consolidates raw NASA battery datasets into a standardized, timestamped schema.
-* **Virtual MCU**: `virtual_mcu.py` runs Coulomb counting and fault logic in Python, emitting telemetry on the same schema a real MCU firmware would use.
-* **Broker**: A FastAPI backend with SQLite (WAL mode) persisting samples and broadcasting them to clients over WebSockets.
-* **Live Telemetry UI**: Real-time cell state, thermal profile, and power dissipation, rendered in a custom dashboard.
+* **Data Pipeline**: Consolidates raw NASA battery datasets into a standardized, timestamped telemetry schema.
+* **Virtual Sensor Node**: `virtual_mcu.py` acts as the IoT device — computing Coulomb counting and fault logic, then emitting telemetry packets.
+* **IoT Broker**: A FastAPI backend with SQLite (WAL mode) ingesting device data and broadcasting it to subscribed clients over WebSockets — the same broker/pub-sub pattern used in MQTT-style IoT stacks.
+* **Live Telemetry Dashboard**: Real-time cell state, thermal profile, and power visualization, updated push-style (no polling).
 
 ## 🏗️ Architecture
 
-* **SIL Path (implemented):** `virtual_mcu.py` computes Coulomb counting + fault logic in Python and pushes JSON payloads to `main.py`, which persists to SQLite and broadcasts over WebSocket to the dashboard.
-* **HIL Path (designed for, not yet built):** The packet schema is UART-compatible by design (sync bytes, checksum framing) so a real STM32 target could replace the virtual MCU without changing the broker or UI.
+* **Virtual device layer (implemented):** `virtual_mcu.py` simulates the edge device — running Coulomb counting + fault logic locally and pushing JSON telemetry to the broker.
+* **Broker layer (implemented):** `main.py` (FastAPI) ingests device payloads, persists them to SQLite, and fans them out to connected dashboard clients via WebSocket.
+* **Physical device layer (designed for, not yet deployed):** The packet framing (sync bytes + checksum) mirrors what a UART-connected microcontroller would send, so a real embedded sensor node could be swapped in later without touching the broker or UI.
 
 ## 🛠️ Tech Stack
 
-* **Simulation / Logic**: Python (Coulomb counting, fault-detection state machine)
-* **Backend Broker**: FastAPI, Uvicorn, SQLite3 (WAL mode)
-* **Frontend UI**: HTML/CSS/JS over WebSockets
-* **Data Processing**: Pandas, Requests
-* **Target hardware (planned)**: STM32 ARM Cortex over UART
+* **Device simulation**: Python (Coulomb counting, fault-detection state machine)
+* **Broker / backend**: FastAPI, Uvicorn, SQLite3 (WAL mode), WebSockets
+* **Dashboard**: HTML/CSS/JS, live WebSocket updates
+* **Data processing**: Pandas, Requests
+* **Target edge hardware (planned)**: STM32 ARM Cortex over UART
 
 ## 🚦 Quick Start
 
-1. **Start the backend broker:**
+1. **Start the broker:**
 ```bash
    uvicorn main:app
 ```
-2. **Run the virtual MCU simulation:**
+2. **Start the virtual sensor node:**
 ```bash
    python virtual_mcu.py
 ```
